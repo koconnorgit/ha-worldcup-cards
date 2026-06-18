@@ -145,3 +145,7 @@ max_height: ""
 ## Credits
 
 Match data by [TheSportsDB](https://www.thesportsdb.com/). This card is not affiliated with FIFA or TheSportsDB.
+
+## License
+
+Released under the [MIT License](LICENSE).
