@@ -474,15 +474,12 @@ class WorldCupCard extends HTMLElement {
     if (state === "upcoming") {
       mid = `<div class="time">${this._fmtTime(new Date(this._kickoff(e)))}</div><div class="badge final">${this._dowShort(this._kickoff(e))}</div>`;
     } else if (state === "live") {
-      // Pulsing LIVE badge plus the current minute. Prefer strProgress (the
-      // minute, e.g. "63"); when the feed omits it, fall back to the status
-      // code, which carries the phase (1H, HT, 2H, ET…). The kickoff time is
-      // shown at the right end of the meta line below.
+      // Pulsing LIVE badge plus the current minute, but only when the feed
+      // provides a real numeric minute (strProgress, e.g. "63"). We deliberately
+      // don't show the phase code (1H/HT/2H…) — the actual kickoff time is on
+      // the meta line below instead.
       const prog = (e.strProgress || "").trim();
-      const status = (e.strStatus || "").trim();
-      const minLabel = prog
-        ? (/^\d+$/.test(prog) ? `${prog}'` : this._esc(prog))
-        : (status && status.toUpperCase() !== "LIVE" ? this._esc(status) : "");
+      const minLabel = /^\d+$/.test(prog) ? `${prog}'` : "";
       mid =
         `<div class="score">${hs}–${as}</div>` +
         `<div class="liveline"><span class="badge live">LIVE</span>` +
@@ -510,10 +507,11 @@ class WorldCupCard extends HTMLElement {
     const groupChip = /^[A-La-l]$/.test(grp) ? `<span class="grp">Group ${grp.toUpperCase()}</span>` : "";
     const venueText = !this._config.compact && e.strVenue ? `<span>${this._esc(e.strVenue)}</span>` : "";
     const leftParts = [groupChip, venueText].filter(Boolean);
-    // For live and finished matches, show the kickoff time at the right end of
-    // this line. (Upcoming matches already show it prominently in the middle.)
+    // For live and finished matches, show the kickoff time (labelled "Start:")
+    // at the right end of this line. Upcoming matches already show it
+    // prominently in the middle, so it's omitted here.
     const startTime = (state === "live" || state === "final")
-      ? `<span class="kt">${this._fmtTime(new Date(this._kickoff(e)))}</span>`
+      ? `<span class="kt">Start: ${this._fmtTime(new Date(this._kickoff(e)))}</span>`
       : "";
     const meta = (leftParts.length || startTime)
       ? `<div class="venue"><span class="meta-left">${leftParts.join('<span class="sep">·</span>')}</span>${startTime}</div>`
