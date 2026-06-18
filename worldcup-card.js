@@ -345,6 +345,10 @@ class WorldCupCard extends HTMLElement {
         padding:1px 6px; border-radius:8px; }
       .badge.final { background: var(--divider-color, rgba(127,127,127,.25)); color: var(--secondary-text-color); }
       .badge.live { background: var(--error-color, #e53935); color:#fff; animation: pulse 1.4s ease-in-out infinite; }
+      .liveline { display:flex; align-items:center; gap:6px; font-size:.8em; }
+      .liveline .kt { font-weight:700; color: var(--secondary-text-color); }
+      .liveline .min { font-weight:800; font-variant-numeric: tabular-nums; color: var(--error-color, #e53935); }
+      .venue .kt { font-weight:700; }
       .venue { grid-column: 1 / -1; font-size:.72em; color: var(--secondary-text-color);
         text-align:center; margin-top:2px; }
       .venue .grp { display:inline-block; padding:0 6px; border-radius:8px; font-weight:700;
@@ -470,8 +474,16 @@ class WorldCupCard extends HTMLElement {
     if (state === "upcoming") {
       mid = `<div class="time">${this._fmtTime(new Date(this._kickoff(e)))}</div><div class="badge final">${this._dowShort(this._kickoff(e))}</div>`;
     } else if (state === "live") {
-      const min = e.strProgress ? this._esc(e.strProgress) : "LIVE";
-      mid = `<div class="score">${hs}–${as}</div><div class="badge live">${min}</div>`;
+      // Pulsing LIVE badge flanked by the kickoff time and the current minute.
+      const startT = this._fmtTime(new Date(this._kickoff(e)));
+      const prog = (e.strProgress || "").trim();
+      const minLabel = prog ? (/^\d+$/.test(prog) ? `${prog}'` : this._esc(prog)) : "";
+      mid =
+        `<div class="score">${hs}–${as}</div>` +
+        `<div class="liveline"><span class="kt">${startT}</span>` +
+        `<span class="badge live">LIVE</span>` +
+        (minLabel ? `<span class="min">${minLabel}</span>` : "") +
+        `</div>`;
     } else {
       mid = `<div class="score">${hs}–${as}</div><div class="badge final">Final</div>`;
     }
@@ -493,7 +505,12 @@ class WorldCupCard extends HTMLElement {
     const grp = (e.strGroup || "").trim();
     const groupChip = /^[A-La-l]$/.test(grp) ? `<span class="grp">Group ${grp.toUpperCase()}</span>` : "";
     const venueText = !this._config.compact && e.strVenue ? `<span>${this._esc(e.strVenue)}</span>` : "";
-    const metaParts = [groupChip, venueText].filter(Boolean);
+    // For finished matches, add the kickoff time and the total game time
+    // (90' regulation, 120' after extra time, +pens if decided on penalties).
+    const timeParts = state === "final"
+      ? [`<span class="kt">${this._fmtTime(new Date(this._kickoff(e)))}</span>`, `<span>${this._totalTime(e)}</span>`]
+      : [];
+    const metaParts = [groupChip, ...timeParts, venueText].filter(Boolean);
     const meta = metaParts.length
       ? `<div class="venue">${metaParts.join('<span class="sep">·</span>')}</div>`
       : "";
@@ -531,6 +548,16 @@ class WorldCupCard extends HTMLElement {
 
   _dowShort(ts) {
     return new Date(ts).toLocaleDateString(undefined, { weekday: "short" });
+  }
+
+  // Total game time for a finished match, inferred from its status (TheSportsDB
+  // exposes no duration field): regulation 90', extra time 120', and a +pens
+  // marker when the tie was decided on penalties.
+  _totalTime(e) {
+    const s = (e.strStatus || "").trim().toUpperCase();
+    if (s === "PEN" || s === "FT_PEN" || s === "AP") return "120' + pens";
+    if (s === "AET") return "120'";
+    return "90'";
   }
 
   _fmtTime(d) {
