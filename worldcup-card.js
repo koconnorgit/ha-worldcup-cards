@@ -346,11 +346,11 @@ class WorldCupCard extends HTMLElement {
       .badge.final { background: var(--divider-color, rgba(127,127,127,.25)); color: var(--secondary-text-color); }
       .badge.live { background: var(--error-color, #e53935); color:#fff; animation: pulse 1.4s ease-in-out infinite; }
       .liveline { display:flex; align-items:center; gap:6px; font-size:.8em; }
-      .liveline .kt { font-weight:700; color: var(--secondary-text-color); }
       .liveline .min { font-weight:800; font-variant-numeric: tabular-nums; color: var(--error-color, #e53935); }
-      .venue .kt { font-weight:700; }
       .venue { grid-column: 1 / -1; font-size:.72em; color: var(--secondary-text-color);
-        text-align:center; margin-top:2px; }
+        margin-top:2px; display:flex; align-items:center; gap:6px; }
+      .venue .meta-left { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .venue .kt { margin-left:auto; flex:0 0 auto; font-weight:700; }
       .venue .grp { display:inline-block; padding:0 6px; border-radius:8px; font-weight:700;
         letter-spacing:.02em; background: var(--secondary-background-color, rgba(127,127,127,.16));
         color: var(--wc-accent); }
@@ -474,10 +474,10 @@ class WorldCupCard extends HTMLElement {
     if (state === "upcoming") {
       mid = `<div class="time">${this._fmtTime(new Date(this._kickoff(e)))}</div><div class="badge final">${this._dowShort(this._kickoff(e))}</div>`;
     } else if (state === "live") {
-      // Pulsing LIVE badge flanked by the kickoff time and the current minute.
-      // Prefer strProgress (the minute, e.g. "63"); when the feed omits it,
-      // fall back to the status code, which carries the phase (1H, HT, 2H, ET…).
-      const startT = this._fmtTime(new Date(this._kickoff(e)));
+      // Pulsing LIVE badge plus the current minute. Prefer strProgress (the
+      // minute, e.g. "63"); when the feed omits it, fall back to the status
+      // code, which carries the phase (1H, HT, 2H, ET…). The kickoff time is
+      // shown at the right end of the meta line below.
       const prog = (e.strProgress || "").trim();
       const status = (e.strStatus || "").trim();
       const minLabel = prog
@@ -485,8 +485,7 @@ class WorldCupCard extends HTMLElement {
         : (status && status.toUpperCase() !== "LIVE" ? this._esc(status) : "");
       mid =
         `<div class="score">${hs}–${as}</div>` +
-        `<div class="liveline"><span class="kt">${startT}</span>` +
-        `<span class="badge live">LIVE</span>` +
+        `<div class="liveline"><span class="badge live">LIVE</span>` +
         (minLabel ? `<span class="min">${minLabel}</span>` : "") +
         `</div>`;
     } else {
@@ -510,14 +509,14 @@ class WorldCupCard extends HTMLElement {
     const grp = (e.strGroup || "").trim();
     const groupChip = /^[A-La-l]$/.test(grp) ? `<span class="grp">Group ${grp.toUpperCase()}</span>` : "";
     const venueText = !this._config.compact && e.strVenue ? `<span>${this._esc(e.strVenue)}</span>` : "";
-    // For finished matches, add the kickoff time and the total game time
-    // (90' regulation, 120' after extra time, +pens if decided on penalties).
-    const timeParts = state === "final"
-      ? [`<span class="kt">${this._fmtTime(new Date(this._kickoff(e)))}</span>`, `<span>${this._totalTime(e)}</span>`]
-      : [];
-    const metaParts = [groupChip, ...timeParts, venueText].filter(Boolean);
-    const meta = metaParts.length
-      ? `<div class="venue">${metaParts.join('<span class="sep">·</span>')}</div>`
+    const leftParts = [groupChip, venueText].filter(Boolean);
+    // For live and finished matches, show the kickoff time at the right end of
+    // this line. (Upcoming matches already show it prominently in the middle.)
+    const startTime = (state === "live" || state === "final")
+      ? `<span class="kt">${this._fmtTime(new Date(this._kickoff(e)))}</span>`
+      : "";
+    const meta = (leftParts.length || startTime)
+      ? `<div class="venue"><span class="meta-left">${leftParts.join('<span class="sep">·</span>')}</span>${startTime}</div>`
       : "";
 
     return `
@@ -553,17 +552,6 @@ class WorldCupCard extends HTMLElement {
 
   _dowShort(ts) {
     return new Date(ts).toLocaleDateString(undefined, { weekday: "short" });
-  }
-
-  // Match-length category for a finished match. TheSportsDB exposes no elapsed,
-  // end-time, or stoppage field, so an exact total (e.g. 90+5) is impossible —
-  // we can only read the category from the status. The trailing "+" denotes the
-  // unknown stoppage added on top of regulation (90'+) or extra time (120'+).
-  _totalTime(e) {
-    const s = (e.strStatus || "").trim().toUpperCase();
-    if (s === "PEN" || s === "FT_PEN" || s === "AP") return "120'+ pens";
-    if (s === "AET") return "120'+";
-    return "90'+";
   }
 
   _fmtTime(d) {
