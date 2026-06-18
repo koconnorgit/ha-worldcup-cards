@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World Cup 2026 — Schedule & Standings</title>
+
+  <style>
+    /* ---- Theme ----------------------------------------------------------
+       The cards read Home Assistant theme variables but all have fallbacks,
+       so we just supply a pleasant dark palette here. Tweak these to restyle
+       both cards at once; swap the :root block for the light theme below. */
+    :root {
+      color-scheme: dark;
+      --primary-color: #03a9f4;            /* accent (logo, qualify bar, links) */
+      --card-background-color: #1f2129;
+      --ha-card-background: #1f2129;
+      --secondary-background-color: #2a2d37;
+      --primary-text-color: #e8eaed;
+      --secondary-text-color: #9aa0aa;
+      --text-primary-color: #ffffff;       /* text on accent backgrounds */
+      --divider-color: rgba(255,255,255,.12);
+      --error-color: #e5484d;
+      --success-color: #46a758;
+    }
+
+    /* Light theme — uncomment to use instead of the dark one above.
+    :root {
+      color-scheme: light;
+      --primary-color: #0277bd;
+      --card-background-color: #ffffff;
+      --ha-card-background: #ffffff;
+      --secondary-background-color: #f1f3f5;
+      --primary-text-color: #1a1c1e;
+      --secondary-text-color: #5f6571;
+      --text-primary-color: #ffffff;
+      --divider-color: rgba(0,0,0,.12);
+      --error-color: #d32f2f;
+      --success-color: #2e7d32;
+    }
+    */
+
+    body {
+      margin: 0;
+      padding: 24px 16px 48px;
+      background: #14161c;
+      color: var(--primary-text-color);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.4;
+    }
+    h1 {
+      text-align: center;
+      font-weight: 700;
+      margin: 8px 0 24px;
+      font-size: clamp(1.4em, 4vw, 2em);
+    }
+    /* Two columns: a wide schedule on the left, standings on the right.
+       Stacks to a single column on narrow screens. The schedule gets the
+       larger share so its match cells stay roomy enough not to clip the
+       team codes. */
+    .cards {
+      display: grid;
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+      gap: 20px;
+      align-items: start;
+      max-width: 1240px;
+      margin: 0 auto;
+    }
+    @media (max-width: 900px) {
+      .cards { grid-template-columns: 1fr; }
+    }
+    footer {
+      text-align: center;
+      color: var(--secondary-text-color);
+      font-size: .8em;
+      margin-top: 28px;
+    }
+    footer a { color: var(--primary-color); }
+  </style>
+
+  <!-- ---- Minimal stand-ins for the two Home Assistant elements the cards
+       wrap themselves in. <ha-card> becomes a styled panel; <ha-icon> maps the
+       handful of MDI icons the cards use to emoji. Defined before the cards
+       load so they're ready when a card first renders. ------------------- -->
+  <script>
+    if (!customElements.get('ha-card')) {
+      customElements.define('ha-card', class extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' }).innerHTML =
+            `<style>
+               :host { display:block;
+                 background: var(--card-background-color, var(--ha-card-background, #1f2129));
+                 color: var(--primary-text-color, #e8eaed);
+                 border-radius: 14px;
+                 box-shadow: 0 2px 10px rgba(0,0,0,.35);
+                 overflow: hidden; }
+             </style><slot></slot>`;
+        }
+      });
+    }
+    if (!customElements.get('ha-icon')) {
+      customElements.define('ha-icon', class extends HTMLElement {
+        static EMOJI = { 'mdi:soccer': '⚽', 'mdi:trophy': '🏆', 'mdi:calendar-today': '📅' };
+        connectedCallback() {
+          this.style.display = 'inline-flex';
+          this.style.alignItems = 'center';
+          this.textContent = this.constructor.EMOJI[this.getAttribute('icon')] || '';
+        }
+      });
+    }
+  </script>
+
+  <!-- The cards themselves. Loaded as plain scripts so the page works straight
+       off the filesystem (file://) — ES modules are blocked over file://. Each
+       card file is wrapped in an IIFE, so their identically-named top-level
+       consts don't collide in the shared global scope. -->
+  <script src="worldcup-card.js"></script>
+  <script src="worldcup-standings-card.js"></script>
+</head>
+
+<body>
+  <h1>⚽ FIFA World Cup 2026</h1>
+
+  <div class="cards" id="cards"></div>
+
+  <footer>
+    Live data from <a href="https://www.thesportsdb.com/" target="_blank" rel="noopener">TheSportsDB</a>.
+    Not affiliated with FIFA.
+  </footer>
+
+  <script>
+    // Helper: build a card element, hand it its YAML-equivalent config, then
+    // mount it. setConfig before append; connectedCallback kicks off fetching.
+    // This classic script runs after the card <script>s in <head> have already
+    // executed and defined their custom elements.
+    function addCard(tag, config) {
+      const el = document.createElement(tag);
+      el.setConfig(config);
+      document.getElementById('cards').appendChild(el);
+    }
+
+    addCard('worldcup-card', {
+      title: 'Schedule',
+      max_height: '78vh',
+      // api_key: 'YOUR_KEY',   // drop in a personal TheSportsDB key for higher rate limits
+    });
+
+    addCard('worldcup-standings-card', {
+      title: 'Standings',
+      max_height: '78vh',
+      // api_key: 'YOUR_KEY',
+    });
+  </script>
+</body>
+</html>
