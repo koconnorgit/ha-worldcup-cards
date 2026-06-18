@@ -475,9 +475,14 @@ class WorldCupCard extends HTMLElement {
       mid = `<div class="time">${this._fmtTime(new Date(this._kickoff(e)))}</div><div class="badge final">${this._dowShort(this._kickoff(e))}</div>`;
     } else if (state === "live") {
       // Pulsing LIVE badge flanked by the kickoff time and the current minute.
+      // Prefer strProgress (the minute, e.g. "63"); when the feed omits it,
+      // fall back to the status code, which carries the phase (1H, HT, 2H, ET…).
       const startT = this._fmtTime(new Date(this._kickoff(e)));
       const prog = (e.strProgress || "").trim();
-      const minLabel = prog ? (/^\d+$/.test(prog) ? `${prog}'` : this._esc(prog)) : "";
+      const status = (e.strStatus || "").trim();
+      const minLabel = prog
+        ? (/^\d+$/.test(prog) ? `${prog}'` : this._esc(prog))
+        : (status && status.toUpperCase() !== "LIVE" ? this._esc(status) : "");
       mid =
         `<div class="score">${hs}–${as}</div>` +
         `<div class="liveline"><span class="kt">${startT}</span>` +
@@ -550,14 +555,15 @@ class WorldCupCard extends HTMLElement {
     return new Date(ts).toLocaleDateString(undefined, { weekday: "short" });
   }
 
-  // Total game time for a finished match, inferred from its status (TheSportsDB
-  // exposes no duration field): regulation 90', extra time 120', and a +pens
-  // marker when the tie was decided on penalties.
+  // Match-length category for a finished match. TheSportsDB exposes no elapsed,
+  // end-time, or stoppage field, so an exact total (e.g. 90+5) is impossible —
+  // we can only read the category from the status. The trailing "+" denotes the
+  // unknown stoppage added on top of regulation (90'+) or extra time (120'+).
   _totalTime(e) {
     const s = (e.strStatus || "").trim().toUpperCase();
-    if (s === "PEN" || s === "FT_PEN" || s === "AP") return "120' + pens";
-    if (s === "AET") return "120'";
-    return "90'";
+    if (s === "PEN" || s === "FT_PEN" || s === "AP") return "120'+ pens";
+    if (s === "AET") return "120'+";
+    return "90'+";
   }
 
   _fmtTime(d) {
