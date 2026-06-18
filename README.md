@@ -6,7 +6,9 @@ It runs **entirely in the browser** using [TheSportsDB](https://www.thesportsdb.
 
 A companion **Standings Card** (`worldcup-standings-card.js`) shows the live group tables — see [Standings card](#standings-card) below.
 
-![World Cup Card](#) <!-- drop a screenshot here once installed -->
+**[▶ Live demo](https://koconnorgit.github.io/ha-worldcup-cards/)** — both cards running as a standalone page.
+
+![World Cup schedule card](docs/schedule.png)
 
 ## Install (single file)
 
@@ -98,6 +100,8 @@ compact: true
 ## Standings card
 
 `worldcup-standings-card.js` is a separate, optional card that shows the **live group standings** — one mini league table per group (Pos · Team · P W D L GF GA GD Pts), with recent form and the qualifying positions highlighted. It uses the same free TheSportsDB API and the same browser-only design, so install it exactly like the schedule card:
+
+![World Cup standings card](docs/standings.png)
 
 1. Copy `worldcup-standings-card.js` into `config/www/`.
 2. Add it as a dashboard resource — **URL:** `/local/worldcup-standings-card.js`, **Resource type:** `JavaScript Module`.

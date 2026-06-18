@@ -4,3 +4,6 @@
 # OS / editor cruft
 .DS_Store
 *.swp
+
+# Source screenshot (cropped versions live in docs/)
+screenshot.png
