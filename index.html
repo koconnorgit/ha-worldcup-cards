@@ -69,6 +69,13 @@
     @media (max-width: 900px) {
       .cards { grid-template-columns: 1fr; }
     }
+    /* The bracket is a full two-sided knockout tree — give it its own
+       quadruple-wide row above the schedule/standings columns. It scrolls
+       horizontally inside the card if the viewport is narrower than the tree. */
+    .bracket-row {
+      width: min(98vw, 1900px);
+      margin: 0 auto 20px;
+    }
     footer {
       text-align: center;
       color: var(--secondary-text-color);
@@ -117,10 +124,13 @@
        consts don't collide in the shared global scope. -->
   <script src="worldcup-card.js"></script>
   <script src="worldcup-standings-card.js"></script>
+  <script src="worldcup-bracket-card.js"></script>
 </head>
 
 <body>
   <h1>⚽ FIFA World Cup 2026</h1>
+
+  <div class="bracket-row" id="bracket"></div>
 
   <div class="cards" id="cards"></div>
 
@@ -134,11 +144,16 @@
     // mount it. setConfig before append; connectedCallback kicks off fetching.
     // This classic script runs after the card <script>s in <head> have already
     // executed and defined their custom elements.
-    function addCard(tag, config) {
+    function addCard(tag, config, parentId = 'cards') {
       const el = document.createElement(tag);
       el.setConfig(config);
-      document.getElementById('cards').appendChild(el);
+      document.getElementById(parentId).appendChild(el);
     }
+
+    addCard('worldcup-bracket-card', {
+      title: 'Knockout Bracket',
+      // api_key: 'YOUR_KEY',
+    }, 'bracket');
 
     addCard('worldcup-card', {
       title: 'Schedule',

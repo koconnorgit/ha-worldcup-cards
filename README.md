@@ -4,9 +4,9 @@ A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card that sho
 
 It runs **entirely in the browser** using [TheSportsDB](https://www.thesportsdb.com/)'s free public API — no add-on, no backend, no API signup required.
 
-A companion **Standings Card** (`worldcup-standings-card.js`) shows the live group tables — see [Standings card](#standings-card) below.
+Two companion cards build on it: a **Standings Card** (`worldcup-standings-card.js`) for the live group tables — see [Standings card](#standings-card) — and a **Bracket Card** (`worldcup-bracket-card.js`) that draws the full knockout tree — see [Bracket card](#bracket-card).
 
-**[▶ Live demo](https://koconnorgit.github.io/ha-worldcup-cards/)** — both cards running as a standalone page.
+**[▶ Live demo](https://koconnorgit.github.io/ha-worldcup-cards/)** — all three cards running as a standalone page.
 
 ![World Cup schedule card](docs/schedule.png)
 
@@ -88,7 +88,7 @@ compact: true
 
 ## Notes
 
-- **Data source / accuracy:** Scores come from TheSportsDB and can lag a live broadcast by a minute or two. All 72 group-stage fixtures load reliably; knockout-round fixtures (Round of 32 onward) appear automatically once the bracket is drawn as groups conclude.
+- **Data source / accuracy:** Scores come from TheSportsDB and can lag a live broadcast by a minute or two. All 72 group-stage fixtures load reliably. Knockout fixtures (Round of 32 onward) aren't in the free feed until the bracket fills, so the card ships the fixed FIFA schedule as a fallback: each knockout match shows its real date, kickoff time, and venue with placeholder slot names (e.g. `1A` vs `2B`, `W73` vs `W74`). As soon as the feed starts returning real fixtures for a round, that round's live data replaces the placeholders automatically.
 - **Why by round, not by day:** The card fetches each tournament round (`eventsround`) rather than each calendar day. TheSportsDB's free per-day endpoint silently truncates busy match days (it returned only 3 of 5 games on June 14), whereas the round endpoint returns every fixture — so this guarantees the complete schedule.
 - **Caching:** Once every match in a round has finished, that round is cached in your browser (its scores never change), so ongoing refreshes only re-poll the in-progress and not-yet-scheduled rounds — keeping the view light on the free API.
 - **Team names:** Shown as FIFA 3-letter codes (e.g. `BRA`, `KOR`, `RSA`); hover over a team to expand it to the full country name on a single line.
@@ -145,6 +145,42 @@ max_height: ""
 > **Note — how the tables are built:** The standings are **computed in the browser from the group-stage match results** (the same `eventsround` fixtures the schedule card loads), *not* read from TheSportsDB's `lookuptable` endpoint. That endpoint lags badly early in the tournament — on matchday 1 it returned only the *leader* of each group, so a card reading it would show just one team per group. Building from the fixtures instead gives complete, correct 12-group tables as soon as results come in. Ranking is points → goal difference → goals for → name (the common simplified order; it doesn't apply FIFA's full head-to-head tiebreakers). By default only **finished** matches count toward the table — set `include_live: true` to fold in-progress scores in as well.
 
 > **Rate limits & the "NetworkError" / "Could not load standings" message:** The free shared API key `123` is rate-limited across *all* TheSportsDB users worldwide. When it's throttled it returns HTTP 429 with no CORS headers, which the browser reports as a generic `NetworkError`. To survive this, the card caches each round in your browser's `localStorage` (a round is cached permanently once all its matches finish) and falls back to the cached copy on any failed poll — so once it has loaded successfully even once, later throttling is invisible. The catch is the **very first** load: if the key is being throttled and nothing is cached yet, that initial fetch can still fail. If you hit the error, either **reload a few times** (the 429s are intermittent — one success is enough to seed the cache), or set your own `api_key` from a TheSportsDB [Patreon key](https://www.thesportsdb.com/), which isn't subject to the shared-key throttling. The schedule card shares the same per-round caching, which is why it can keep working while a fresh standings card shows the error.
+
+## Bracket card
+
+`worldcup-bracket-card.js` draws the full **knockout bracket** — Round of 32 through the Final, plus the third-place play-off — as a classic two-sided tree that meets at a centered final. It's a wide card: give it a full-width slot (a panel view, or a full-width cell in the sections view, where it requests the full 12-column span), and it scrolls horizontally if the viewport is narrower than the tree. Install it like the others:
+
+1. Copy `worldcup-bracket-card.js` into `config/www/`.
+2. Add it as a dashboard resource — **URL:** `/local/worldcup-bracket-card.js`, **Resource type:** `JavaScript Module`.
+3. Add the card:
+
+```yaml
+type: custom:worldcup-bracket-card
+```
+
+**How the bracket fills in** — in priority order:
+
+1. **Live knockout fixtures** from TheSportsDB once they exist (real teams + scores). A finished tie's winner is propagated into the next round automatically (so the Round-of-16 slot reading "W73" becomes the actual team the moment Match 73 ends).
+2. **Our own derivation:** group winners and runners-up are computed from the group-stage results — the same fixtures the schedule and standings cards use — so a Round-of-32 slot fills in *as soon as a group takes shape*, before TheSportsDB publishes the knockout draw. Slots whose group isn't mathematically decided yet are shown **provisional** (italic + dimmed with a dotted underline), and update live as results come in.
+3. **The fixed FIFA schedule** for structure, kickoff times and venues, with placeholder slot labels (`1A`, `2B`, `3rd`, `W73`, …) until a real team resolves. Hover any cell for its round, full date and venue.
+
+> **Note — the third-placed slots:** eight Round-of-32 ties take a "best third-placed" team (shown as `3rd`). FIFA assigns *which* third-placed team lands in *which* tie via an official combination table that depends on exactly which groups' thirds qualify, so these are left as `3rd` placeholders rather than guessed. Everything else (group winners/runners-up and all match-winner propagation) resolves automatically.
+
+### Bracket options
+
+All optional.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `title` | `World Cup 2026 — Bracket` | Card header. Set to `""` to hide. |
+| `refresh` | `120` | Auto-refresh interval in seconds (minimum 30). |
+| `season` | `"2026"` | Tournament season. |
+| `league_id` | `"4429"` | TheSportsDB league id. `4429` = FIFA World Cup. |
+| `group_rounds` | `[1,2,3]` | Round codes for the group stage (used to derive group winners/runners-up). |
+| `knockout_rounds` | `[32,16,125,150,160,200]` | Round codes for R32, R16, QF, SF, third-place and Final. |
+| `api_key` | `"123"` | TheSportsDB API key. `123` is the free shared test key. |
+
+The three cards are independent — use any combination. The same per-round browser caching and rate-limit fallback described above apply here too.
 
 ## Credits
 
