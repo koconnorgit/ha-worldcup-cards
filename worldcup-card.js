@@ -91,7 +91,8 @@ class WorldCupCard extends HTMLElement {
     this._lastSig = null;
     this._timer = null;
     this._scrolledToToday = false;
-    this._lastFetch = null;
+    this._lastFetch = null; // time of the last *successful* (un-throttled) poll
+    this._rateLimited = false;
   }
 
   _todayISO() {
@@ -176,7 +177,11 @@ class WorldCupCard extends HTMLElement {
       const r = await fetch(
         `https://www.thesportsdb.com/api/v1/json/${api_key}/eventsround.php?id=${league_id}&r=${round}&s=${encodeURIComponent(season)}`
       );
-      const j = r.ok ? await r.json() : { events: [] };
+      if (!r.ok) {
+        if (r.status === 429) this._rateLimited = true; // throttled — flag it, keep cache
+        return cached ? cached.events : [];
+      }
+      const j = await r.json();
       const events = j.events || [];
       // "final" = at least one fixture and all of them finished.
       const final =
@@ -217,9 +222,12 @@ class WorldCupCard extends HTMLElement {
 
   async _fetch() {
     const rounds = Array.isArray(this._config.rounds) ? this._config.rounds : DEFAULTS.rounds;
+    this._rateLimited = false; // _fetchRound flips this if any round gets a 429
     try {
       const results = await this._pool(rounds, 5, (r) => this._fetchRound(r));
-      this._lastFetch = new Date(); // stamp every poll, even if nothing changed
+      // Only advance the "last updated" stamp on a clean poll; a throttled one
+      // keeps the previous successful time and shows "Rate limited" instead.
+      if (!this._rateLimited) this._lastFetch = new Date();
       // Flatten + dedupe by event id.
       const seen = new Set();
       let events = [];
@@ -271,9 +279,21 @@ class WorldCupCard extends HTMLElement {
 
   _touchUpdatedLine() {
     const el = this.shadowRoot.querySelector(".updated");
-    if (el && this._lastFetch) {
-      el.textContent = `Updated ${this._fmtUpdated(this._lastFetch)} · TheSportsDB`;
+    if (el) {
+      el.textContent = this._updatedText();
+      el.classList.toggle("rate-limited", this._rateLimited);
     }
+  }
+
+  // Text for the footer line: normally "Updated <time>", but when the last poll
+  // was throttled we say so and keep showing the last good sync time.
+  _updatedText() {
+    if (this._rateLimited) {
+      return this._lastFetch
+        ? `Rate limited · last updated ${this._fmtUpdated(this._lastFetch)} · TheSportsDB`
+        : `Rate limited · TheSportsDB`;
+    }
+    return `Updated ${this._fmtUpdated(this._lastFetch || new Date())} · TheSportsDB`;
   }
 
   _fmtUpdated(d) {
@@ -360,6 +380,7 @@ class WorldCupCard extends HTMLElement {
       .meta { font-size:.7em; color: var(--secondary-text-color); }
       .msg { padding: 24px 16px; text-align:center; color: var(--secondary-text-color); }
       .updated { text-align:center; font-size:.68em; color: var(--secondary-text-color); padding:10px 0 2px; }
+      .updated.rate-limited { color: var(--warning-color, #e5a50a); }
       @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
       @media (min-width: 500px) { .grid { grid-template-columns: 1fr 1fr; } }
     `;
@@ -388,7 +409,7 @@ class WorldCupCard extends HTMLElement {
       : "";
 
     const updated = !this._loading && !this._error
-      ? `<div class="updated">Updated ${this._fmtUpdated(this._lastFetch || new Date())} · TheSportsDB</div>`
+      ? `<div class="updated${this._rateLimited ? " rate-limited" : ""}">${this._updatedText()}</div>`
       : "";
 
     const mh = this._config.max_height;
