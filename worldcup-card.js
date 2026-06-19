@@ -80,6 +80,79 @@ const TEAM_CODES = {
   Tunisia: "TUN", Turkey: "TUR", USA: "USA", Uruguay: "URU", Uzbekistan: "UZB",
 };
 
+// FIFA 2026 knockout schedule — fixed dates/times/venues, published long before
+// the teams are known. TheSportsDB's free feed doesn't carry these fixtures until
+// the bracket fills, so we ship them as a static fallback: the card shows the
+// kickoff time and the slot it'll be (e.g. "1A vs 2B") with placeholder names.
+// As soon as the live feed starts returning real fixtures for a round, that round's
+// real data takes over and these are dropped (see _fetch).
+//
+// `round` matches the round codes the card requests (32=R32, 16=R16, 125=QF,
+// 150=SF, 160=third place, 200=final). `ts` is UTC (kickoff converted from the
+// venue's local time), the same naive-UTC format strTimestamp uses.
+const KNOCKOUT_2026 = [
+  // Round of 32
+  { m: 73, round: 32, ts: "2026-06-28T19:00:00", venue: "SoFi Stadium, Inglewood", home: "Runner-up Group A", away: "Runner-up Group B" },
+  { m: 74, round: 32, ts: "2026-06-29T20:30:00", venue: "Gillette Stadium, Foxborough", home: "Winner Group E", away: "3rd Group A/B/C/D/F" },
+  { m: 75, round: 32, ts: "2026-06-30T01:00:00", venue: "Estadio BBVA, Guadalupe", home: "Winner Group F", away: "Runner-up Group C" },
+  { m: 76, round: 32, ts: "2026-06-29T17:00:00", venue: "NRG Stadium, Houston", home: "Winner Group C", away: "Runner-up Group F" },
+  { m: 77, round: 32, ts: "2026-06-30T21:00:00", venue: "MetLife Stadium, East Rutherford", home: "Winner Group I", away: "3rd Group C/D/F/G/H" },
+  { m: 78, round: 32, ts: "2026-06-30T17:00:00", venue: "AT&T Stadium, Arlington", home: "Runner-up Group E", away: "Runner-up Group I" },
+  { m: 79, round: 32, ts: "2026-07-01T01:00:00", venue: "Estadio Azteca, Mexico City", home: "Mexico", away: "3rd Group C/E/F/H/I" },
+  { m: 80, round: 32, ts: "2026-07-01T16:00:00", venue: "Mercedes-Benz Stadium, Atlanta", home: "Winner Group L", away: "3rd Group E/H/I/J/K" },
+  { m: 81, round: 32, ts: "2026-07-02T00:00:00", venue: "Levi's Stadium, Santa Clara", home: "Winner Group D", away: "3rd Group B/E/F/I/J" },
+  { m: 82, round: 32, ts: "2026-07-01T20:00:00", venue: "Lumen Field, Seattle", home: "Winner Group G", away: "3rd Group A/E/H/I/J" },
+  { m: 83, round: 32, ts: "2026-07-02T23:00:00", venue: "BMO Field, Toronto", home: "Runner-up Group K", away: "Runner-up Group L" },
+  { m: 84, round: 32, ts: "2026-07-02T19:00:00", venue: "SoFi Stadium, Inglewood", home: "Winner Group H", away: "Runner-up Group J" },
+  { m: 85, round: 32, ts: "2026-07-03T03:00:00", venue: "BC Place, Vancouver", home: "Winner Group B", away: "3rd Group E/F/G/I/J" },
+  { m: 86, round: 32, ts: "2026-07-03T22:00:00", venue: "Hard Rock Stadium, Miami Gardens", home: "Winner Group J", away: "Runner-up Group H" },
+  { m: 87, round: 32, ts: "2026-07-04T01:30:00", venue: "Arrowhead Stadium, Kansas City", home: "Winner Group K", away: "3rd Group D/E/I/J/L" },
+  { m: 88, round: 32, ts: "2026-07-03T18:00:00", venue: "AT&T Stadium, Arlington", home: "Runner-up Group D", away: "Runner-up Group G" },
+  // Round of 16
+  { m: 89, round: 16, ts: "2026-07-04T21:00:00", venue: "Lincoln Financial Field, Philadelphia", home: "Winner Match 74", away: "Winner Match 77" },
+  { m: 90, round: 16, ts: "2026-07-04T17:00:00", venue: "NRG Stadium, Houston", home: "Winner Match 73", away: "Winner Match 75" },
+  { m: 91, round: 16, ts: "2026-07-05T20:00:00", venue: "MetLife Stadium, East Rutherford", home: "Winner Match 76", away: "Winner Match 78" },
+  { m: 92, round: 16, ts: "2026-07-06T00:00:00", venue: "Estadio Azteca, Mexico City", home: "Winner Match 79", away: "Winner Match 80" },
+  { m: 93, round: 16, ts: "2026-07-06T19:00:00", venue: "AT&T Stadium, Arlington", home: "Winner Match 83", away: "Winner Match 84" },
+  { m: 94, round: 16, ts: "2026-07-07T00:00:00", venue: "Lumen Field, Seattle", home: "Winner Match 81", away: "Winner Match 82" },
+  { m: 95, round: 16, ts: "2026-07-07T16:00:00", venue: "Mercedes-Benz Stadium, Atlanta", home: "Winner Match 86", away: "Winner Match 88" },
+  { m: 96, round: 16, ts: "2026-07-07T20:00:00", venue: "BC Place, Vancouver", home: "Winner Match 85", away: "Winner Match 87" },
+  // Quarter-finals
+  { m: 97, round: 125, ts: "2026-07-09T20:00:00", venue: "Gillette Stadium, Foxborough", home: "Winner Match 89", away: "Winner Match 90" },
+  { m: 98, round: 125, ts: "2026-07-10T19:00:00", venue: "SoFi Stadium, Inglewood", home: "Winner Match 93", away: "Winner Match 94" },
+  { m: 99, round: 125, ts: "2026-07-11T21:00:00", venue: "Hard Rock Stadium, Miami Gardens", home: "Winner Match 91", away: "Winner Match 92" },
+  { m: 100, round: 125, ts: "2026-07-12T01:00:00", venue: "Arrowhead Stadium, Kansas City", home: "Winner Match 95", away: "Winner Match 96" },
+  // Semi-finals
+  { m: 101, round: 150, ts: "2026-07-14T19:00:00", venue: "AT&T Stadium, Arlington", home: "Winner Match 97", away: "Winner Match 98" },
+  { m: 102, round: 150, ts: "2026-07-15T19:00:00", venue: "Mercedes-Benz Stadium, Atlanta", home: "Winner Match 99", away: "Winner Match 100" },
+  // Third-place play-off
+  { m: 103, round: 160, ts: "2026-07-18T21:00:00", venue: "Hard Rock Stadium, Miami Gardens", home: "Loser Match 101", away: "Loser Match 102" },
+  // Final
+  { m: 104, round: 200, ts: "2026-07-19T19:00:00", venue: "MetLife Stadium, East Rutherford", home: "Winner Match 101", away: "Winner Match 102" },
+];
+
+// Expand a static knockout entry into the same event shape the API returns, so it
+// flows through every downstream path (state, kickoff, grouping, render) unchanged.
+function knockoutEvent(k) {
+  return {
+    idEvent: `wc-ko-${k.m}`,
+    intRound: String(k.round),
+    strTimestamp: k.ts,
+    dateEvent: k.ts.slice(0, 10),
+    strTime: k.ts.slice(11),
+    strHomeTeam: k.home,
+    strAwayTeam: k.away,
+    strVenue: k.venue,
+    strStatus: "NS",
+    strProgress: "",
+    intHomeScore: null,
+    intAwayScore: null,
+    strGroup: "", // knockout ties have no group chip
+    strHomeTeamBadge: "",
+    strAwayTeamBadge: "",
+  };
+}
+
 class WorldCupCard extends HTMLElement {
   constructor() {
     super();
@@ -228,15 +301,28 @@ class WorldCupCard extends HTMLElement {
       // Only advance the "last updated" stamp on a clean poll; a throttled one
       // keeps the previous successful time and shows "Rate limited" instead.
       if (!this._rateLimited) this._lastFetch = new Date();
-      // Flatten + dedupe by event id.
+      // Flatten + dedupe by event id. Track which rounds the live feed actually
+      // covered so we know where the static knockout fallback is still needed.
       const seen = new Set();
+      const liveRounds = new Set();
       let events = [];
-      for (const list of results) {
+      results.forEach((list, idx) => {
+        if (list && list.length) liveRounds.add(Number(rounds[idx]));
         for (const e of list || []) {
           const id = e.idEvent || `${e.dateEvent}-${e.strEvent}`;
           if (seen.has(id)) continue;
           seen.add(id);
           events.push(e);
+        }
+      });
+
+      // Static knockout fallback: for any requested knockout round the feed
+      // returned nothing for, fill in the fixed FIFA schedule (times/venues/slots)
+      // with placeholder team names. Real fixtures supersede these per round.
+      const wantRounds = new Set(rounds.map(Number));
+      for (const k of KNOCKOUT_2026) {
+        if (wantRounds.has(k.round) && !liveRounds.has(k.round)) {
+          events.push(knockoutEvent(k));
         }
       }
 
@@ -550,8 +636,18 @@ class WorldCupCard extends HTMLElement {
   _code(team) {
     if (!team) return "";
     if (TEAM_CODES[team]) return TEAM_CODES[team];
-    // Fallback for any unmapped team (e.g. a not-yet-named knockout slot):
-    // first three letters, uppercased and stripped of non-letters.
+    // Knockout placeholder slots get a tidy short code instead of the generic
+    // 3-letter fallback (the full label still shows on hover):
+    //   "Winner Group E"   -> "1E"   "Runner-up Group B" -> "2B"
+    //   "3rd Group A/B/.."  -> "3rd"  "Winner Match 73"   -> "W73"
+    //   "Loser Match 101"   -> "L101"
+    let mm;
+    if ((mm = /^Winner(?:s)? Group ([A-L])$/i.exec(team))) return `1${mm[1].toUpperCase()}`;
+    if ((mm = /^Runner(?:s)?-up Group ([A-L])$/i.exec(team))) return `2${mm[1].toUpperCase()}`;
+    if (/^3rd Group/i.test(team)) return "3rd";
+    if ((mm = /^Winner(?:s)? Match (\d+)$/i.exec(team))) return `W${mm[1]}`;
+    if ((mm = /^Loser(?:s)? Match (\d+)$/i.exec(team))) return `L${mm[1]}`;
+    // Generic fallback: first three letters, uppercased, non-letters stripped.
     const cleaned = team.replace(/[^A-Za-z]/g, "");
     return (cleaned.slice(0, 3) || team.slice(0, 3)).toUpperCase();
   }
