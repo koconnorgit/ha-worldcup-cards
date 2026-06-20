@@ -81,6 +81,80 @@ const TEAM_CODES = {
   Tunisia: "TUN", Turkey: "TUR", USA: "USA", Uruguay: "URU", Uzbekistan: "UZB",
 };
 
+// Rank a group's teams by the FIFA 2026 group-stage tiebreakers, in order:
+//   1. overall points
+//   2. head-to-head points       ┐ a mini-league over only the matches played
+//   3. head-to-head goal diff     │ between the teams that are level on points
+//   4. head-to-head goals scored ┘
+//   5. overall goal difference
+//   6. overall goals scored
+//   7. team name (stand-in for fair-play / FIFA-ranking / drawing of lots)
+// For 2026 FIFA moved head-to-head ahead of overall goal difference, so a tie is
+// settled by the results between the tied teams first. `rows` are the team stat
+// objects; `matches` the counted group fixtures ({h,a,hs,as}); `nameOf(row)` the
+// team name; `acc` reads each row's overall pts/gd/gf. The head-to-head step is
+// reapplied to any subset that stays level, mirroring FIFA's procedure of
+// re-running the H2H criteria on the teams still tied after the first pass.
+// (Kept in sync with rankGroupTable in worldcup-bracket-card.js.)
+function rankGroupTable(rows, matches, nameOf, acc) {
+  const h2h = (subset) => {
+    const names = new Set(subset.map(nameOf));
+    const tbl = new Map();
+    for (const n of names) tbl.set(n, { pts: 0, gd: 0, gf: 0 });
+    for (const mt of matches) {
+      if (!names.has(mt.h) || !names.has(mt.a)) continue;
+      const H = tbl.get(mt.h), A = tbl.get(mt.a);
+      H.gf += mt.hs; H.gd += mt.hs - mt.as;
+      A.gf += mt.as; A.gd += mt.as - mt.hs;
+      if (mt.hs > mt.as) H.pts += 3;
+      else if (mt.hs < mt.as) A.pts += 3;
+      else { H.pts++; A.pts++; }
+    }
+    return tbl;
+  };
+  const byOverall = (a, b) =>
+    acc.gd(b) - acc.gd(a) || acc.gf(b) - acc.gf(a) ||
+    String(nameOf(a)).localeCompare(String(nameOf(b)));
+  // Order a block of teams already level on overall points.
+  const breakTie = (block) => {
+    if (block.length <= 1) return block;
+    const tbl = h2h(block);
+    const k = (r) => tbl.get(nameOf(r));
+    const sorted = [...block].sort((a, b) => {
+      const A = k(a), B = k(b);
+      return B.pts - A.pts || B.gd - A.gd || B.gf - A.gf;
+    });
+    const out = [];
+    let i = 0;
+    while (i < sorted.length) {
+      const A = k(sorted[i]);
+      let j = i + 1;
+      while (j < sorted.length) {
+        const B = k(sorted[j]);
+        if (B.pts === A.pts && B.gd === A.gd && B.gf === A.gf) j++;
+        else break;
+      }
+      const sub = sorted.slice(i, j);
+      if (sub.length === 1) out.push(sub[0]);
+      else if (sub.length === block.length) out.push(...sub.sort(byOverall)); // H2H separated nothing
+      else out.push(...breakTie(sub)); // reapply H2H to the still-level subset
+      i = j;
+    }
+    return out;
+  };
+  // Split into equal-points blocks, then break ties within each.
+  const byPts = [...rows].sort((a, b) => acc.pts(b) - acc.pts(a));
+  const result = [];
+  let i = 0;
+  while (i < byPts.length) {
+    let j = i + 1;
+    while (j < byPts.length && acc.pts(byPts[j]) === acc.pts(byPts[i])) j++;
+    result.push(...breakTie(byPts.slice(i, j)));
+    i = j;
+  }
+  return result;
+}
+
 class WorldCupStandingsCard extends HTMLElement {
   constructor() {
     super();
@@ -253,13 +327,15 @@ class WorldCupStandingsCard extends HTMLElement {
   }
 
   // Build group tables from fixtures. Counts finished matches (and in-progress
-  // ones too when include_live is set). FIFA tiebreakers beyond points are
-  // complex (head-to-head, fair-play); we use the common points → goal
-  // difference → goals-for → name ordering.
+  // ones too when include_live is set), then ranks each group by the FIFA 2026
+  // tiebreakers via rankGroupTable: points → head-to-head (points, GD, GF among
+  // the tied teams) → overall GD → overall GF → name.
   _computeStandings(events) {
     const countLive = this._config.include_live;
     // group -> (team -> stats)
     const groups = new Map();
+    // group -> [{h,a,hs,as}] of counted matches, for head-to-head tiebreaks
+    const matches = new Map();
 
     const teamStat = (g, name, badge) => {
       if (!groups.has(g)) groups.set(g, new Map());
@@ -290,6 +366,8 @@ class WorldCupStandingsCard extends HTMLElement {
       if (Number.isNaN(hs) || Number.isNaN(as)) continue;
 
       const g = `Group ${String(e.strGroup).replace(/^group\s*/i, "").trim()}`;
+      if (!matches.has(g)) matches.set(g, []);
+      matches.get(g).push({ h: e.strHomeTeam, a: e.strAwayTeam, hs, as });
       const home = teamStat(g, e.strHomeTeam, e.strHomeTeamBadge);
       const away = teamStat(g, e.strAwayTeam, e.strAwayTeamBadge);
 
@@ -318,15 +396,11 @@ class WorldCupStandingsCard extends HTMLElement {
         s.intGoalDifference = s.intGoalsFor - s.intGoalsAgainst;
         s.strForm = s._form.slice(-5).join(""); // last 5, oldest → newest
       }
-      rows.sort(
-        (a, b) =>
-          b.intPoints - a.intPoints ||
-          b.intGoalDifference - a.intGoalDifference ||
-          b.intGoalsFor - a.intGoalsFor ||
-          String(a.strTeam).localeCompare(String(b.strTeam))
-      );
-      rows.forEach((s, i) => (s.intRank = i + 1));
-      out.push({ group: g, rows });
+      const ranked = rankGroupTable(rows, matches.get(g) || [], (s) => s.strTeam, {
+        pts: (s) => s.intPoints, gd: (s) => s.intGoalDifference, gf: (s) => s.intGoalsFor,
+      });
+      ranked.forEach((s, i) => (s.intRank = i + 1));
+      out.push({ group: g, rows: ranked });
     }
 
     let result = out.sort((a, b) =>
