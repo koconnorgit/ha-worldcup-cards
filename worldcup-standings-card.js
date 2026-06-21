@@ -377,13 +377,16 @@ class WorldCupStandingsCard extends HTMLElement {
 
       if (hs > as) {
         home.intWin++; away.intLoss++;
-        home._form.push("W"); away._form.push("L");
+        home._form.push({ r: "W", vs: e.strAwayTeam });
+        away._form.push({ r: "L", vs: e.strHomeTeam });
       } else if (hs < as) {
         away.intWin++; home.intLoss++;
-        away._form.push("W"); home._form.push("L");
+        away._form.push({ r: "W", vs: e.strHomeTeam });
+        home._form.push({ r: "L", vs: e.strAwayTeam });
       } else {
         home.intDraw++; away.intDraw++;
-        home._form.push("D"); away._form.push("D");
+        home._form.push({ r: "D", vs: e.strAwayTeam });
+        away._form.push({ r: "D", vs: e.strHomeTeam });
       }
     }
 
@@ -394,7 +397,8 @@ class WorldCupStandingsCard extends HTMLElement {
       for (const s of rows) {
         s.intPoints = s.intWin * 3 + s.intDraw;
         s.intGoalDifference = s.intGoalsFor - s.intGoalsAgainst;
-        s.strForm = s._form.slice(-5).join(""); // last 5, oldest → newest
+        s._formDetail = s._form.slice(-5); // last 5, oldest → newest
+        s.strForm = s._formDetail.map((f) => f.r).join("");
       }
       const ranked = rankGroupTable(rows, matches.get(g) || [], (s) => s.strTeam, {
         pts: (s) => s.intPoints, gd: (s) => s.intGoalDifference, gf: (s) => s.intGoalsFor,
@@ -501,7 +505,7 @@ class WorldCupStandingsCard extends HTMLElement {
       tr.qualify td.pos { box-shadow: inset 3px 0 0 var(--wc-accent); }
       .form { display:flex; gap:2px; justify-content:center; }
       .form span { width:14px; height:14px; line-height:14px; border-radius:3px;
-        font-size:9px; font-weight:800; color:#fff; }
+        font-size:9px; font-weight:800; color:#fff; cursor:help; }
       .form .W { background: var(--success-color, #43a047); }
       .form .D { background: var(--secondary-text-color, #888); }
       .form .L { background: var(--error-color, #e53935); }
@@ -599,7 +603,7 @@ class WorldCupStandingsCard extends HTMLElement {
     const teamCell =
       `<div class="team-cell">${badge}<span class="name"><span class="code">${this._esc(this._code(e.strTeam))}</span><span class="full">${this._esc(e.strTeam)}</span></span></div>`;
 
-    const form = showForm ? `<td>${this._renderForm(e.strForm)}</td>` : "";
+    const form = showForm ? `<td>${this._renderForm(e._formDetail)}</td>` : "";
 
     if (compact) {
       return `<tr class="${qualify ? "qualify" : ""}">
@@ -626,13 +630,22 @@ class WorldCupStandingsCard extends HTMLElement {
     </tr>`;
   }
 
-  _renderForm(form) {
-    if (!form) return "";
-    const pills = String(form)
-      .toUpperCase()
-      .split("")
-      .filter((c) => c === "W" || c === "D" || c === "L")
-      .map((c) => `<span class="${c}">${c}</span>`)
+  _renderForm(detail) {
+    const labels = { W: "Won", D: "Drew", L: "Lost" };
+    const list = Array.isArray(detail)
+      ? detail
+      : String(detail || "")
+          .toUpperCase()
+          .split("")
+          .filter((c) => c === "W" || c === "D" || c === "L")
+          .map((c) => ({ r: c, vs: "" }));
+    if (!list.length) return "";
+    const pills = list
+      .filter((f) => f && (f.r === "W" || f.r === "D" || f.r === "L"))
+      .map((f) => {
+        const tip = f.vs ? `${labels[f.r]} vs. ${f.vs}` : labels[f.r];
+        return `<span class="${f.r}" title="${this._esc(tip)}">${f.r}</span>`;
+      })
       .join("");
     return `<div class="form">${pills}</div>`;
   }
