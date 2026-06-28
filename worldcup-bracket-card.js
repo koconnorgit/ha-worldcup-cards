@@ -915,8 +915,8 @@ class WorldCupBracketCard extends HTMLElement {
     const ko = this._matchKickoff(x);
     const when = `${this._dowShort(ko)} ${this._fmtTime(new Date(ko))}`;
     const title = `${ROUND_NAME[x.round] || ""} · Match ${x.m}\n${new Date(ko).toLocaleString(undefined, { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}\n${x.venue}`;
-    const metaRight = x.state === "live" ? `<span style="color:var(--error-color,#e53935)">LIVE</span>` : when;
-    const meta = `<div class="meta" title="${this._esc(title)}"><span>M${x.m}</span><span>${this._esc(metaRight)}</span></div>`;
+    const metaRight = x.state === "live" ? `<span style="color:var(--error-color,#e53935)">LIVE</span>` : this._esc(when);
+    const meta = `<div class="meta" title="${this._esc(title)}"><span>M${x.m}</span><span>${metaRight}</span></div>`;
 
     const side = (p, score) => {
       const isWin = x.winner && p.team && x.winner === p.team;
