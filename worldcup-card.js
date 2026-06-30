@@ -444,8 +444,10 @@ class WorldCupCard extends HTMLElement {
       .team:hover .full { display:inline; }
       .team:hover .name { overflow:visible; }
       .mid { display:flex; flex-direction:column; align-items:center; min-width:64px; gap:22px; }
-      .score { font-size:1.25em; font-weight:800; font-variant-numeric: tabular-nums; letter-spacing:1px; }
+      .score { font-size:1.25em; font-weight:800; font-variant-numeric: tabular-nums; letter-spacing:1px; text-align:center; }
       .score.dim { color: var(--secondary-text-color); }
+      .score .pens { display:block; font-size:.5em; font-weight:600; letter-spacing:0;
+        text-transform:uppercase; color: var(--secondary-text-color); margin-top:1px; }
       .time { font-size:.95em; font-weight:700; }
       .badge { font-size:.62em; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
         padding:1px 6px; border-radius:8px; }
@@ -593,7 +595,16 @@ class WorldCupCard extends HTMLElement {
         (minLabel ? `<span class="min">${minLabel}</span>` : "") +
         `</div>`;
     } else {
-      mid = `<div class="score">${hs}–${as}</div><div class="badge final">Final</div>`;
+      // A tie level after extra time is settled on penalties; TheSportsDB
+      // carries the shootout result in the *ScoreExtra fields. Show it only
+      // when regulation/ET finished level and the shootout has a winner.
+      const hsx = e.intHomeScoreExtra, asx = e.intAwayScoreExtra;
+      const pens =
+        hs !== "" && String(hs) === String(as) &&
+        hsx != null && hsx !== "" && asx != null && asx !== "" && String(hsx) !== String(asx)
+          ? `<span class="pens">${this._esc(hsx)}–${this._esc(asx)} pens</span>`
+          : "";
+      mid = `<div class="score">${hs}–${as}${pens}</div><div class="badge final">Final</div>`;
     }
 
     const badge = (url) =>
