@@ -670,7 +670,7 @@ class WorldCupBracketCard extends HTMLElement {
         homeLabel: k.home, awayLabel: k.away,
         home: { team: null, prov: false, label: k.home },
         away: { team: null, prov: false, label: k.away },
-        hs: null, as: null, status: "", state: "upcoming",
+        hs: null, as: null, hsx: null, asx: null, status: "", state: "upcoming",
         winner: null, loser: null,
       };
     }
@@ -735,19 +735,32 @@ class WorldCupBracketCard extends HTMLElement {
         target.away = { team: ea, prov: false, label: target.awayLabel, badge: e.strAwayTeamBadge };
         target.hs = e.intHomeScore;
         target.as = e.intAwayScore;
+        // A tie level after extra time is decided on penalties; TheSportsDB
+        // carries the shootout result in the *ScoreExtra fields.
+        target.hsx = e.intHomeScoreExtra;
+        target.asx = e.intAwayScoreExtra;
         target.status = e.strStatus || "";
         target.state = this._state(e);
         if (e.strTimestamp) target.ts = e.strTimestamp;
       }
       // Decide winner/loser for finished ties so the next round can resolve.
       for (const x of ms) {
-        if (x.state === "final") {
+        if (x.state === "final" && x.home.team && x.away.team) {
           const hs = Number(x.hs), as = Number(x.as);
-          if (!Number.isNaN(hs) && !Number.isNaN(as) && hs !== as && x.home.team && x.away.team) {
-            const homeWon = hs > as;
-            x.winner = homeWon ? x.home.team : x.away.team;
-            x.loser = homeWon ? x.away.team : x.home.team;
-            x.winnerProv = false;
+          if (!Number.isNaN(hs) && !Number.isNaN(as)) {
+            let homeWon = null;
+            if (hs !== as) {
+              homeWon = hs > as;
+            } else {
+              // Level after regulation/extra time — break the tie on penalties.
+              const hx = Number(x.hsx), ax = Number(x.asx);
+              if (!Number.isNaN(hx) && !Number.isNaN(ax) && hx !== ax) homeWon = hx > ax;
+            }
+            if (homeWon !== null) {
+              x.winner = homeWon ? x.home.team : x.away.team;
+              x.loser = homeWon ? x.away.team : x.home.team;
+              x.winnerProv = false;
+            }
           }
         }
       }
@@ -841,6 +854,7 @@ class WorldCupBracketCard extends HTMLElement {
       .row .sc { margin-left:auto; font-variant-numeric:tabular-nums; font-weight:800; font-size:12px; min-width:10px; text-align:right; }
       .row.win .code { color: var(--wc-accent); }
       .row.win .sc { color: var(--wc-accent); }
+      .row .sc .pen { font-weight:600; font-size:10px; opacity:.7; }
       .row.prov .code { font-style:italic; opacity:.72; border-bottom:1px dotted currentColor; }
       .cell.live { border-color: var(--error-color, #e53935); box-shadow:0 0 0 1px var(--error-color, #e53935); }
       .cell.final-cup { width: 134px; }
@@ -918,13 +932,17 @@ class WorldCupBracketCard extends HTMLElement {
     const metaRight = x.state === "live" ? `<span style="color:var(--error-color,#e53935)">LIVE</span>` : this._esc(when);
     const meta = `<div class="meta" title="${this._esc(title)}"><span>M${x.m}</span><span>${metaRight}</span></div>`;
 
-    const side = (p, score) => {
+    const side = (p, score, pen) => {
       const isWin = x.winner && p.team && x.winner === p.team;
       const display = p.team ? this._code(p.team) : this._code(p.label);
       // Tooltip is the full team name; flag provisional picks so it's explicit
       // that the group isn't decided yet (matches the italic/dotted styling).
       const full = (p.team || p.label) + (p.prov && p.team ? " (Provisional)" : "");
-      const sc = (score === null || score === undefined || score === "") ? "" : this._esc(score);
+      const has = (v) => v !== null && v !== undefined && v !== "";
+      // A shootout score rides alongside the regulation score, e.g. "1 (4)".
+      const sc = has(score)
+        ? this._esc(score) + (has(pen) ? ` <span class="pen">(${this._esc(pen)})</span>` : "")
+        : "";
       const cls = ["row", isWin ? "win" : "", p.prov ? "prov" : ""].filter(Boolean).join(" ");
       // Show the crest only for a locked team — a resolved, non-provisional side.
       const crest = p.team && !p.prov ? (this._badges[p.team] || p.badge) : null;
@@ -932,8 +950,10 @@ class WorldCupBracketCard extends HTMLElement {
       return `<div class="${cls}" title="${this._esc(full)}">${badge}<span class="code">${this._esc(display)}</span><span class="sc">${sc}</span></div>`;
     };
 
+    // Only treat the *Extra fields as a shootout when regulation finished level.
+    const pens = x.hs !== null && String(x.hs) === String(x.as);
     const cls = ["cell", x.state === "live" ? "live" : "", isFinal ? "final-cup" : ""].filter(Boolean).join(" ");
-    return `<div class="${cls}">${meta}${side(x.home, x.hs)}${side(x.away, x.as)}</div>`;
+    return `<div class="${cls}">${meta}${side(x.home, x.hs, pens ? x.hsx : null)}${side(x.away, x.as, pens ? x.asx : null)}</div>`;
   }
 
   _dowShort(ts) {
